@@ -552,6 +552,8 @@ class BertEncoder(nn.Module):
         all_hidden_states = () if output_hidden_states else None
         all_self_attentions = () if output_attentions else None
         all_cross_attentions = () if output_attentions and self.config.add_cross_attention else None
+        all_queries = []
+        all_keys = []
 
         if self.gradient_checkpointing and self.training:
             if use_cache:
@@ -589,6 +591,8 @@ class BertEncoder(nn.Module):
                     past_key_value,
                     output_attentions,
                 )
+                all_queries.append(query)
+                all_keys.append(key)
 
             hidden_states = layer_outputs[0]
             if use_cache:
@@ -600,14 +604,15 @@ class BertEncoder(nn.Module):
 
         if output_hidden_states:
             all_hidden_states = all_hidden_states + (hidden_states,)
-
+        concat_queries = torch.cat(all_queries,dim=0)     
+        concat_keys = torch.cat(all_keys,dim=0) 
         if not return_dict:
             return tuple(
                 v
                 for v in [
                     hidden_states,
-                    query,
-                    key,
+                    concat_queries,
+                    concat_keys,
                     next_decoder_cache,
                     all_hidden_states,
                     all_self_attentions,
@@ -617,8 +622,8 @@ class BertEncoder(nn.Module):
             )
         return BaseModelOutputWithPastAndCrossAttentions(
             last_hidden_state=hidden_states,
-            query=query,
-            key=key,
+            query=concat_queries,
+            key=concat_keys,
             past_key_values=next_decoder_cache,
             hidden_states=all_hidden_states,
             attentions=all_self_attentions,
